@@ -1,4 +1,4 @@
-# tplqt
+# Task parameterised linear quadratic tracking
 
 Task-parameterised learning and generation of spatula strokes.
 
