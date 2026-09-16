@@ -1,0 +1,41 @@
+{
+  "demo_name": "honey_6",
+  "start_time": 1784538066.1654131,
+  "stop_time": 1784538073.0228267,
+  "duration_s": 6.8574135303497314,
+  "contact_pose": {
+    "time": 1784538068.1812236,
+    "frame_id": "mocap_base",
+    "position": {
+      "x": 0.24102688694201715,
+      "y": -0.05434531021060962,
+      "z": 0.2504409953252732
+    },
+    "orientation": {
+      "x": 0.25702816247940063,
+      "y": -0.009152359329164028,
+      "z": 0.1399494856595993,
+      "w": 0.9561731219291687
+    },
+    "tracking_valid": true,
+    "mean_error": 0.000174516680999659
+  },
+  "contact_time": 1784538068.1889498,
+  "scoop_weight_mg": 0.0,
+  "descriptors": {
+    "primary": "Viscous fluid",
+    "secondary": [
+      "Cohesive",
+      "Adhesive with vial",
+      "Adhesive with spatula"
+    ],
+    "low_volume": false
+  },
+  "recording_rate_hz": 250.0,
+  "spatula_rigid_body_name": "curved_spatula_090526",
+  "spatula_rigid_body_id": 5,
+  "vial_lip_tf_parent": "world",
+  "vial_lip_tf_child": "vial_lip",
+  "ft_topic": "/bota_driver_node/wrench",
+  "ft_frame_id": "bota_driver_node_wrench"
+}

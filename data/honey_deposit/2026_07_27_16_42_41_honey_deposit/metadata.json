@@ -1,0 +1,37 @@
+{
+  "demo_name": "honey_deposit",
+  "start_time": 1785163361.2689316,
+  "stop_time": 1785163369.3073165,
+  "duration_s": 8.038384914398193,
+  "contact_pose": {
+    "time": 1785163365.1244898,
+    "frame_id": "mocap_base",
+    "position": {
+      "x": -0.14894931018352509,
+      "y": -0.1184336394071579,
+      "z": 0.34766140580177307
+    },
+    "orientation": {
+      "x": 0.01957419514656067,
+      "y": -0.11413438618183136,
+      "z": 0.44349202513694763,
+      "w": -0.8887659907341003
+    },
+    "tracking_valid": true,
+    "mean_error": 0.00037706675357185304
+  },
+  "contact_time": 1785163365.1278365,
+  "scoop_weight_mg": 0.0,
+  "descriptors": {
+    "primary": "Viscous fluid",
+    "secondary": [],
+    "low_volume": false
+  },
+  "recording_rate_hz": 250.0,
+  "spatula_rigid_body_name": "curved_spatula_090526",
+  "spatula_rigid_body_id": 5,
+  "vial_lip_tf_parent": "world",
+  "vial_lip_tf_child": "vial_lip",
+  "ft_topic": "/bota_driver_node/wrench",
+  "ft_frame_id": "bota_driver_node_wrench"
+}

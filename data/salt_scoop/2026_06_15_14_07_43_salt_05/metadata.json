@@ -1,0 +1,37 @@
+{
+  "demo_name": "salt_05",
+  "start_time": 1781525263.354519,
+  "stop_time": 1781525267.8515704,
+  "duration_s": 4.497051477432251,
+  "contact_pose": {
+    "time": 1781525265.0055308,
+    "frame_id": "mocap_base",
+    "position": {
+      "x": 0.17777159810066223,
+      "y": -0.09683255106210709,
+      "z": 0.24371932446956635
+    },
+    "orientation": {
+      "x": -0.17317230999469757,
+      "y": -0.05483672022819519,
+      "z": -0.2835127115249634,
+      "w": -0.9416075944900513
+    },
+    "tracking_valid": true,
+    "mean_error": 0.0004028345865663141
+  },
+  "contact_time": 1781525265.0103083,
+  "scoop_weight_mg": 0.0,
+  "descriptors": {
+    "primary": "Grainy",
+    "secondary": [],
+    "low_volume": false
+  },
+  "recording_rate_hz": 250.0,
+  "spatula_rigid_body_name": "curved_spatula_090526",
+  "spatula_rigid_body_id": 5,
+  "vial_lip_tf_parent": "world",
+  "vial_lip_tf_child": "vial_lip",
+  "ft_topic": "/bota_driver_node/wrench",
+  "ft_frame_id": "bota_driver_node_wrench"
+}

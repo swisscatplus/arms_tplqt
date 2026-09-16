@@ -1,0 +1,20 @@
+{
+  "description": "Rigid transform from the motion-capture frame (mocap_base) to the workbench world frame, one entry per calibration session. Each entry is the pose of mocap_base expressed in world: p_world = R(quaternion) p_mocap_base + translation, with the quaternion in xyzw order. Every demonstration folder must be processed with the calibration that was in force when it was recorded; 'datasets' records that mapping.",
+  "datasets": {
+    "salt_scoop": "2026-06-01",
+    "honey_scoop": "2026-06-01",
+    "honey_deposit": "2026-07-27"
+  },
+  "calibrations": {
+    "2026-06-01": {
+      "translation": [-0.33923826167657317, 0.40110038382695307, 0.02719264880394548],
+      "quaternion": [-0.028038625197740173, -0.007405847740145632, -0.015112212999634845, 0.9994651619413878],
+      "source": "hand-eye calibration of the motion-capture frame against the UR3e base"
+    },
+    "2026-07-27": {
+      "translation": [-0.243485117106325, 0.468345840539977, 0.001257243251758],
+      "quaternion": [0.005829026389486, -0.006096808142101, 0.701854678112732, 0.712270217117845],
+      "source": "hand-eye calibration against the FR3 base, composed with the world-to-FR3-base transform"
+    }
+  }
+}
