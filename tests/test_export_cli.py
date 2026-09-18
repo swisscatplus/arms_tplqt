@@ -13,20 +13,17 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
-from conftest import (CALIBRATION, synthetic_demonstration, vial_pose_of,
-                      write_demonstration)
+from conftest import vial_pose_of, write_cli_dataset
 from tplqt import cli
-from tplqt.calibration import calibration_for_dataset, load_config
+from tplqt.calibration import load_config
 from tplqt.dataset import load_dataset
 from tplqt.export import FIELDS, load_trajectory, save_trajectory
-from tplqt.frames import mocap_to_world, world_to_mocap
 from tplqt.preprocess import prepare_dataset
 from tplqt.safety import SafetySettings, VialGeometry, containment_margins
 from tplqt.synthesize import synthesize
 
 CONTACT = np.array([0.005, -0.003, -0.040])
 HORIZON = 40
-N_CLI_DEMOS = 3
 CLI_SAMPLES = 600
 SHORT_SAMPLES = 250
 # A vial too narrow for the stroke the tracker alone produces, so the constrained
@@ -38,21 +35,6 @@ SAFE_VIAL = VialGeometry(body_radius=0.003, lip_radius=0.003)
 def generated(model, single_stroke):
     """A short generated stroke, orientation included."""
     return synthesize(model, vial_pose_of(single_stroke), CONTACT, horizon=HORIZON)
-
-
-def write_cli_dataset(root, n_samples):
-    """Write the demonstrations into ``root``, in the frame of its own calibration."""
-    calib = calibration_for_dataset(os.path.basename(root))
-    for index in range(N_CLI_DEMOS):
-        demo = synthetic_demonstration(index, n_samples=n_samples)
-        pos, quat = mocap_to_world(demo.spatula_pos, demo.spatula_quat,
-                                   calibration=CALIBRATION)
-        demo.spatula_pos, demo.spatula_quat = world_to_mocap(pos, quat, calibration=calib)
-        contact = int(np.argmin(np.abs(demo.time - demo.contact_time)))
-        demo.contact_pos_mocap = demo.spatula_pos[contact]
-        demo.contact_quat_mocap = demo.spatula_quat[contact]
-        write_demonstration(str(root / demo.name), demo)
-    return str(root)
 
 
 @pytest.fixture(scope="module")

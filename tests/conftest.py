@@ -18,14 +18,16 @@ import numpy as np
 import pytest
 from scipy.spatial.transform import Rotation as R
 
+from tplqt.calibration import calibration_for_dataset
 from tplqt.dataset import Demonstration, load_dataset
-from tplqt.frames import aim_tool_axis, world_to_mocap
+from tplqt.frames import aim_tool_axis, mocap_to_world, world_to_mocap
 from tplqt.model import fit
 from tplqt.preprocess import prepare_dataset
 
 CALIBRATION = (np.array([-0.33, 0.40, 0.027]),
                R.from_rotvec([0.01, -0.02, 0.03]).as_quat())
 RATE_HZ = 250.0
+N_CLI_DEMOS = 3
 VIAL_POSITION = np.array([0.30, -0.10, 0.20])
 VIAL_TILT_DEG = 18.0
 
@@ -128,6 +130,26 @@ def write_demonstration(folder: str, demo: Demonstration) -> str:
             "recording_rate_hz": demo.rate_hz,
         }, f)
     return folder
+
+
+def write_cli_dataset(root, n_samples):
+    """Write demonstrations into ``root``, in the frame of the calibration it names.
+
+    The command line looks a dataset's calibration up by the name of its
+    directory, so a dataset written for it has to be named after one the
+    registry knows and expressed in that calibration's frame.
+    """
+    calib = calibration_for_dataset(os.path.basename(root))
+    for index in range(N_CLI_DEMOS):
+        demo = synthetic_demonstration(index, n_samples=n_samples)
+        pos, quat = mocap_to_world(demo.spatula_pos, demo.spatula_quat,
+                                   calibration=CALIBRATION)
+        demo.spatula_pos, demo.spatula_quat = world_to_mocap(pos, quat, calibration=calib)
+        contact = int(np.argmin(np.abs(demo.time - demo.contact_time)))
+        demo.contact_pos_mocap = demo.spatula_pos[contact]
+        demo.contact_quat_mocap = demo.spatula_quat[contact]
+        write_demonstration(str(root / demo.name), demo)
+    return str(root)
 
 
 @pytest.fixture(scope="session")

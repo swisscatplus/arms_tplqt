@@ -7,7 +7,8 @@ wall or the bottom and lifts it out. `tplqt` learns that stroke from
 demonstrations and regenerates it for a vial that stands somewhere else and a
 contact point that was never demonstrated, as a full Cartesian trajectory --
 position, orientation, and the velocities to feed forward -- which it can be
-required to keep inside the vial.
+required to keep inside the vial, and which it can draw in that vial so the
+result can be looked at rather than only measured.
 
 The model is a task-parameterised hidden Markov model: every demonstration is
 described at once from the vial frame and from the contact frame, so the fitted
@@ -38,6 +39,16 @@ prefix:
 ```bash
 python3 -m pip install -e .
 ```
+
+Drawing a stroke needs rerun, and matplotlib for the video; neither is needed for
+anything else:
+
+```bash
+python3 -m pip install rerun-sdk matplotlib     # or: python3 -m pip install -e ".[viz]"
+```
+
+The video is written through ffmpeg, which is not a Python package: install it
+from your system, on Debian or Ubuntu with `apt install ffmpeg`.
 
 ## Data
 
@@ -126,6 +137,84 @@ import tplqt
 arrays, metadata = tplqt.load_trajectory("salt_scoop.npz")
 ```
 
+## Looking at the stroke
+
+`view` draws the strokes of one or more of those files in the vial they were
+generated for: the vial as a wireframe of its real shape, the demonstrations
+behind them, the contact point in yellow, and the spatula riding each stroke
+carrying its own axis triad, so the lean of the blade and the roll about it are
+both visible while the stroke is scrubbed.
+
+```bash
+python3 -m tplqt generate data/salt_scoop --contact 0 0 -0.043 --safe --out salt_scoop.npz
+python3 -m tplqt view salt_scoop.npz --demos data/salt_scoop
+rerun salt_scoop.rrd
+```
+
+`view` writes `salt_scoop.rrd` next to the trajectory; `rerun` opens it. To skip
+the file and open the viewer directly, use `--spawn`:
+
+```bash
+python3 -m tplqt view salt_scoop.npz --demos data/salt_scoop --spawn
+```
+
+The scoop should drop in through the mouth, run down the middle to the yellow
+contact point at the bottom, then lift and drift a few millimetres off the axis on
+the way out, with the spatula leaning into the vial throughout and the grey
+demonstrations around it. Ask for a contact point off the axis and the descent
+follows it.
+
+Several trajectories are drawn together, each in its own colour -- the first red,
+the second green -- which is how a stroke and its constrained re-solve are
+compared. The deposit puts the spatula against the wall, so it is the one where
+the constraints bite:
+
+```bash
+python3 -m tplqt generate data/honey_deposit --contact-orientation radial \
+    --contact 0.0 0.011 -0.045 --flat-ends --out deposit.npz
+python3 -m tplqt generate data/honey_deposit --contact-orientation radial \
+    --contact 0.0 0.011 -0.045 --flat-ends --safe --out deposit_inside.npz
+python3 -m tplqt view deposit.npz deposit_inside.npz --demos data/honey_deposit
+```
+
+`view` measures each stroke as it draws it -- how deep it goes, how close it comes
+to the contact point, and how much clearance the blade keeps from the wall and the
+mouth, negative where it reaches through them:
+
+```
+  stroke                       depth    to the contact    clearance
+  deposit                   -45.2 mm           0.21 mm    -2.641 mm
+  deposit_inside            -45.0 mm           0.11 mm    -0.004 mm
+```
+
+So the red stroke has the blade 2.6 mm through the wall and the green one is the
+same stroke held against it, which is what `--safe` buys and what the two colours
+show. On the scooping datasets the demonstrated stroke already clears the wall, so
+there `--safe` changes nothing and the two strokes are drawn on top of each other.
+
+For a figure, or for a machine with no viewer to open, `--mp4` draws the scene as
+a video instead, from a general viewpoint and from straight down the bore. It is a
+plain plot rather than the recording -- the vial, the demonstrations, the contact
+point and the blade of each stroke, without the axis triad the viewer carries. It
+needs matplotlib and ffmpeg, and takes about fifteen seconds:
+
+```bash
+python3 -m tplqt view salt_scoop.npz --demos data/salt_scoop --mp4 salt_scoop.mp4
+```
+
+From a script, the scene is built and drawn directly:
+
+```python
+import tplqt
+
+stroke = tplqt.synthesize(model, vial_pose, contact_point)
+scene = tplqt.Scene(vial_pose=vial_pose,
+                    trajectories=[tplqt.Trajectory.from_synthesis(stroke)],
+                    demonstrations=[s.pos_vial for s in strokes],
+                    contact_point=contact_point, dt=stroke.dt)
+tplqt.record_rrd("stroke.rrd", scene)     # or tplqt.show(scene) to open the viewer
+```
+
 ## Using it as a library
 
 ```python
@@ -167,7 +256,8 @@ python3 -m examples.generate_stroke data/salt_scoop
 | `synthesize` | generate a stroke for a new vial pose and contact point |
 | `safety` | re-solve that stroke so the spatula stays inside the vial |
 | `export` | write and read a generated stroke |
-| `cli` | the `generate` and `evaluate` commands |
+| `viz` | draw a stroke in the vial it was generated for |
+| `cli` | the `generate`, `evaluate` and `view` commands |
 
 ### The two task frames
 
@@ -231,6 +321,10 @@ python3 -m pip install pytest
 python3 -m pytest                                    # the suite, no data needed
 TPLQT_DATASET=data/salt_scoop python3 -m pytest       # also the tests that use a dataset
 ```
+
+The suite runs without rerun, matplotlib or ffmpeg: what is drawn is checked
+against a recorder standing in for rerun, and the two tests that really write a
+recording and a video skip when they cannot.
 
 ## Citation
 

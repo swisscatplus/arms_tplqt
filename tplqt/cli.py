@@ -1,33 +1,39 @@
-"""Command line for fitting a model and generating a stroke.
+"""Command line for fitting a model, generating a stroke and looking at it.
 
-Two commands:
+Three commands:
 
 ``generate``
     fit a model on a dataset, generate a stroke for a vial pose and a contact
     point, report how it tracks the demonstrations and optionally write it to a
     ``.npz``;
 ``evaluate``
-    fit a model and replay every demonstration, reporting the reproduction error.
+    fit a model and replay every demonstration, reporting the reproduction error;
+``view``
+    draw generated strokes in the vial they were generated for, as a rerun
+    recording or a video.
 
-Run them as ``python -m tplqt.cli <command> <dataset directory>``.
+Run them as ``python -m tplqt <command>``.
 """
 from __future__ import annotations
 
 import argparse
-from typing import Optional
+import os
+from typing import List, Optional
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from .calibration import calibration, calibration_names
 from .dataset import dataset_name, load_dataset
-from .export import save_trajectory
+from .export import load_trajectory, save_trajectory
 from .frames import CONTACT_ORIENTATIONS, aim_tool_axis
 from .model import ORIENTATION_FRAMES, fit
 from .preprocess import prepare_dataset
 from .reproduce import orientation_rms_deg, position_rms, reproduce
 from .safety import SafetySettings, SpatulaGeometry, VialGeometry, containment_margins
 from .synthesize import path_rms_by_state, synthesize
+from .viz import (Scene, Trajectory, entity_name, record_rrd, render_mp4,
+                  show)
 
 
 def _fit(args):
@@ -77,7 +83,7 @@ def generate(args):
     print(f"  contact point {np.round(contact, 4).tolist()} in the vial frame, "
           f"start at the lip {np.round(args.start_shift, 4).tolist()} {start}")
     print(f"  closest approach to the contact point {reach * 1e3:.2f} mm, "
-          f"depth reached {stroke.pos_vial[:, 2].min() * 1e2:.1f} cm, "
+          f"depth reached {stroke.pos_vial[:, 2].min() * 1e3:.1f} mm, "
           f"jerk {stroke.jerk_rms:.3f} m/s^3")
 
     rows, overall = path_rms_by_state(model, strokes, stroke)
@@ -92,8 +98,8 @@ def generate(args):
         wall, lip = containment_margins(stroke.pos_world, stroke.quat_world,
                                         (A_vial, b_vial), settings)
         print(f"  solver {stroke.solver_status}; clearance from the wall "
-              f"{np.nanmin(wall) * 1e3:+.2f} mm, from the mouth "
-              f"{np.nanmin(lip) * 1e3:+.2f} mm")
+              f"{np.nanmin(wall) * 1e3:+.3f} mm, from the mouth "
+              f"{np.nanmin(lip) * 1e3:+.3f} mm")
 
     if args.out:
         path = save_trajectory(args.out, stroke, metadata={
@@ -106,6 +112,8 @@ def generate(args):
             "orientation_frame": model.orientation_frame,
         })
         print(f"  wrote {path}")
+        print(f"  look at it with: python3 -m tplqt view {path} "
+              f"--demos {args.data_dir}")
 
 
 def evaluate(args):
@@ -122,6 +130,143 @@ def evaluate(args):
           f"{np.mean(orientation):>10.2f} deg")
     print(f"  {'standard deviation':<34} {np.std(position) * 1e3:>7.2f} mm "
           f"{np.std(orientation):>10.2f} deg")
+
+
+# Two trajectories may take the same vial pose from different demonstrations of it,
+# so a scene they can share is one they agree on at the scale it is drawn at.
+SCENE_TOLERANCE_M = 1e-3
+SCENE_TOLERANCE_DEG = 1.0
+
+
+def _scene_difference(first: dict, other: dict) -> Optional[str]:
+    """How two trajectories disagree about the scene, or ``None`` if they do not.
+
+    Everything the scene is drawn and measured in -- the vial pose and the contact
+    point -- is taken from the first trajectory, so a second one generated for a
+    different vial would be drawn outside it and measured against the wrong frame.
+    """
+    def moved(key, what):
+        if (key in first) != (key in other):
+            return f"one of them records no {what}"
+        if key in first:
+            distance = float(np.linalg.norm(np.asarray(first[key], float)
+                                            - np.asarray(other[key], float)))
+            if distance > SCENE_TOLERANCE_M:
+                return f"their {what}s are {distance * 1e3:.1f} mm apart"
+        return None
+
+    for key, what in (("vial_position", "vial"), ("contact_point_vial_frame",
+                                                  "contact point")):
+        difference = moved(key, what)
+        if difference is not None:
+            return difference
+    if ("vial_quaternion" in first) != ("vial_quaternion" in other):
+        return "one of them records no vial orientation"
+    if "vial_quaternion" in first:
+        turned = np.degrees((R.from_quat(first["vial_quaternion"]).inv()
+                             * R.from_quat(other["vial_quaternion"])).magnitude())
+        if turned > SCENE_TOLERANCE_DEG:
+            return f"their vials are turned {turned:.1f} degrees from each other"
+    return None
+
+
+def _load_for_view(paths: List[str]):
+    """Read the trajectories to draw, reporting what each one does."""
+    trajectories, first, names = [], None, set()
+    for path in paths:
+        arrays, metadata = load_trajectory(path)
+        if first is None:
+            first = metadata
+        elif _scene_difference(first, metadata) is not None:
+            raise SystemExit(
+                f"{path} was not generated for the same situation as {paths[0]}: "
+                f"{_scene_difference(first, metadata)}. Only strokes of one vial and "
+                f"one contact point can be drawn together, since the scene is built "
+                f"and measured in that one frame; view them one at a time instead")
+        name = os.path.splitext(os.path.basename(path))[0]
+        while entity_name(name) in names:           # two files may share a basename
+            name += "_"
+        names.add(entity_name(name))
+        trajectories.append(Trajectory(arrays["position"], arrays["orientation"],
+                                       arrays["velocity"], name=name))
+        print(f"{path}: {len(arrays['time'])} samples of "
+              f"{metadata.get('dataset', 'an unnamed dataset')}, "
+              f"{'constrained' if metadata.get('constrained') else 'unconstrained'}, "
+              f"tip speed up to "
+              f"{np.linalg.norm(arrays['velocity'], axis=1).max() * 1e2:.1f} cm/s")
+    return trajectories, first
+
+
+def _vial_pose_for_view(args, metadata):
+    """The vial pose to draw the scene in, from the command line or the file."""
+    if args.vial_pose:
+        return np.asarray(args.vial_pose[:3], float), np.asarray(args.vial_pose[3:], float)
+    if "vial_position" not in metadata or "vial_quaternion" not in metadata:
+        raise SystemExit(
+            "this trajectory does not record the vial pose it was generated for, so "
+            "there is nowhere to put the vial: give the pose with --vial-pose")
+    return (np.asarray(metadata["vial_position"], float),
+            np.asarray(metadata["vial_quaternion"], float))
+
+
+def _clearance(trajectory, vial_frame, settings: SafetySettings) -> float:
+    """Smallest clearance the blade keeps from the wall and the mouth, in metres.
+
+    Negative means the blade reaches through the vial somewhere along the stroke,
+    which is what an unconstrained stroke near the wall does.
+    """
+    wall, lip = containment_margins(trajectory.position, trajectory.orientation,
+                                    vial_frame, settings)
+    crossings = lip[np.isfinite(lip)]
+    return float(min(np.min(wall), np.min(crossings) if len(crossings) else np.inf))
+
+
+def view(args):
+    trajectories, metadata = _load_for_view(args.trajectories)
+    vial_pose = _vial_pose_for_view(args, metadata)
+    contact = metadata.get("contact_point_vial_frame")
+
+    demonstrations = None
+    if args.demos:
+        strokes = prepare_dataset(
+            load_dataset(args.demos),
+            calibration=calibration(args.calibration) if args.calibration else None,
+            contact_orientation=metadata.get("contact_orientation", "vial"))
+        demonstrations = [stroke.pos_vial for stroke in strokes]
+        print(f"  {len(strokes)} demonstrations from {args.demos} behind them")
+
+    scene = Scene(vial_pose=vial_pose, trajectories=trajectories,
+                  vial=VialGeometry(body_radius=args.vial_radius,
+                                    lip_radius=args.lip_radius),
+                  spatula=SpatulaGeometry(length=args.blade_length),
+                  demonstrations=demonstrations, contact_point=contact,
+                  dt=metadata.get("dt"),
+                  name=metadata.get("dataset", trajectories[0].name))
+
+    A_vial, b_vial = scene.frame
+    target = None if contact is None else scene.to_world(contact)
+    settings = SafetySettings(vial=scene.vial, spatula=scene.spatula)
+    print(f"  {'stroke':<24} {'depth':>9} {'to the contact':>17} {'clearance':>12}")
+    for trajectory in trajectories:
+        depth = ((trajectory.position - b_vial) @ A_vial[:, 2]).min()
+        reach = ("" if target is None else
+                 f"{np.linalg.norm(trajectory.position - target, axis=1).min() * 1e3:.2f} mm")
+        clearance = _clearance(trajectory, (A_vial, b_vial), settings)
+        print(f"  {trajectory.name:<24} {depth * 1e3:>6.1f} mm {reach:>17} "
+              f"{clearance * 1e3:>+9.3f} mm")
+
+    if args.spawn:
+        show(scene)
+        print("  opened the rerun viewer")
+    out = args.out
+    if out is None and not args.spawn:
+        out = os.path.splitext(args.trajectories[0])[0] + ".rrd"
+    if out is not None:
+        record_rrd(out, scene)
+        print(f"  wrote {out}; open it with: rerun {out}")
+    if args.mp4:
+        render_mp4(args.mp4, scene, fps=args.fps)
+        print(f"  wrote {args.mp4}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -189,6 +334,43 @@ def build_parser() -> argparse.ArgumentParser:
         "evaluate", help="replay every demonstration and report the reproduction error")
     common(evaluate_parser, 1e-4)
     evaluate_parser.set_defaults(function=evaluate)
+
+    view_parser = commands.add_parser(
+        "view", help="draw generated strokes in the vial they were generated for")
+    view_parser.add_argument("trajectories", nargs="+",
+                             help=".npz files written by generate --out; several are "
+                                  "drawn together, each in its own colour")
+    view_parser.add_argument("--demos", default=None,
+                             help="dataset directory whose demonstrations are drawn "
+                                  "behind the strokes for context")
+    view_parser.add_argument("--calibration", default=None,
+                             choices=list(calibration_names()),
+                             help="motion-capture calibration to lift those "
+                                  "demonstrations with (default: the one registered "
+                                  "for the dataset directory)")
+    view_parser.add_argument("--out", default=None,
+                             help="write the recording here (default: the first "
+                                  "trajectory with a .rrd suffix)")
+    view_parser.add_argument("--spawn", action="store_true",
+                             help="open the rerun viewer; nothing is written unless "
+                                  "--out asks for it as well")
+    view_parser.add_argument("--mp4", default=None,
+                             help="also draw the scene as a video at this path; needs "
+                                  "matplotlib and ffmpeg")
+    view_parser.add_argument("--fps", type=int, default=20,
+                             help="frame rate of that video (default 20)")
+    view_parser.add_argument("--vial-pose", type=float, nargs=7,
+                             metavar=("X", "Y", "Z", "QX", "QY", "QZ", "QW"),
+                             help="pose of the centre of the lip in world, for a "
+                                  "trajectory that does not record one")
+    view_parser.add_argument("--vial-radius", type=float,
+                             default=VialGeometry().body_radius,
+                             help="inner radius of the vial body, in metres")
+    view_parser.add_argument("--lip-radius", type=float, default=VialGeometry().lip_radius,
+                             help="radius of the vial opening, in metres")
+    view_parser.add_argument("--blade-length", type=float, default=SpatulaGeometry().length,
+                             help="length of the spatula blade, in metres")
+    view_parser.set_defaults(function=view)
     return parser
 
 

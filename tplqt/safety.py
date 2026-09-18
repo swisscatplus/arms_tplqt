@@ -74,13 +74,16 @@ class VialGeometry:
 
     The vial is a cylinder of radius ``body_radius`` that narrows to
     ``lip_radius`` at the opening over a conical shoulder of length
-    ``shoulder_length``. Depth is measured in the vial frame, zero at the lip and
-    negative inside.
+    ``shoulder_length``, and is ``length`` deep. Depth is measured in the vial
+    frame, zero at the lip and negative inside. The constraints are set by the
+    radii and the shoulder; ``length`` says where the bottom is, which only
+    :mod:`tplqt.viz` needs, to draw it.
     """
 
     body_radius: float = 0.01250
     lip_radius: float = 0.00850
     shoulder_length: float = 0.01480
+    length: float = 0.05421
 
 
 @dataclass(frozen=True)

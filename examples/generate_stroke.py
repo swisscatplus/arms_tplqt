@@ -42,5 +42,13 @@ print(f"generated {len(stroke.xi)} samples at {1 / stroke.dt:.0f} Hz")
 print(f"closest approach to the contact point: {reach * 1e3:.2f} mm")
 print(f"clearance from the wall: {np.nanmin(wall) * 1e3:.2f} mm")
 
-tplqt.save_trajectory("stroke.npz", stroke, metadata={"dataset": data_dir})
+# Nothing in the arrays says where the world frame is anchored, so the vial pose
+# and the contact point go into the metadata; that is what lets the stroke be drawn.
+tplqt.save_trajectory("stroke.npz", stroke, metadata={
+    "dataset": data_dir,
+    "vial_position": vial_pose[0].tolist(),
+    "vial_quaternion": vial_pose[1].tolist(),
+    "contact_point_vial_frame": contact_point.tolist(),
+})
 print("wrote stroke.npz")
+print(f"look at it with: python3 -m tplqt view stroke.npz --demos {data_dir}")

@@ -19,7 +19,9 @@ The pipeline, in the order it runs:
 ``synthesize``
     generate a stroke for a new vial pose and contact point;
 ``safety``
-    re-solve that stroke so the spatula stays inside the vial.
+    re-solve that stroke so the spatula stays inside the vial;
+``viz``
+    draw the stroke in the vial it was generated for, to look at.
 
 ``gaussian``, ``hmm`` and ``lqt`` hold the estimation and control machinery the
 model is built on.
@@ -36,16 +38,18 @@ from .reproduce import Reproduction, orientation_rms_deg, position_rms, reproduc
 from .safety import (InfeasibleTrajectory, SafetySettings, SpatulaGeometry, VialGeometry,
                      containment_margins, worst_violation)
 from .synthesize import Synthesis, mean_contact, path_rms_by_state, synthesize, task_frames
+from .viz import Scene, Trajectory, record_rrd, render_mp4, show
 
 __all__ = [
-    "Demonstration", "Reproduction", "SafetySettings", "SpatulaGeometry", "Stroke",
-    "Synthesis", "TaskParameterizedModel", "VialGeometry", "InfeasibleTrajectory",
+    "Demonstration", "Reproduction", "SafetySettings", "Scene", "SpatulaGeometry",
+    "Stroke", "Synthesis", "TaskParameterizedModel", "Trajectory", "VialGeometry",
+    "InfeasibleTrajectory",
     "calibration", "calibration_for_dataset", "chart_excursion_deg",
     "containment_margins", "dataset_name", "geodesic_angle_deg",
     "fit", "load_dataset", "load_demonstration", "load_trajectory", "mean_contact",
     "orientation_rms_deg", "path_rms_by_state", "position_rms", "prepare",
-    "prepare_dataset", "reproduce", "save_trajectory", "synthesize", "task_frames",
-    "worst_violation",
+    "prepare_dataset", "record_rrd", "render_mp4", "reproduce", "save_trajectory",
+    "show", "synthesize", "task_frames", "worst_violation",
 ]
 
 __version__ = "1.0.0"
