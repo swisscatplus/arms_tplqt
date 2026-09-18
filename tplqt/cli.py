@@ -32,8 +32,7 @@ from .preprocess import prepare_dataset
 from .reproduce import orientation_rms_deg, position_rms, reproduce
 from .safety import SafetySettings, SpatulaGeometry, VialGeometry, containment_margins
 from .synthesize import path_rms_by_state, synthesize
-from .viz import (Scene, Trajectory, entity_name, record_rrd, render_mp4,
-                  show)
+from .viz import Scene, Trajectory, entity_name, record_rrd, show
 
 
 def _fit(args):
@@ -264,9 +263,6 @@ def view(args):
     if out is not None:
         record_rrd(out, scene)
         print(f"  wrote {out}; open it with: rerun {out}")
-    if args.mp4:
-        render_mp4(args.mp4, scene, fps=args.fps)
-        print(f"  wrote {args.mp4}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -354,11 +350,6 @@ def build_parser() -> argparse.ArgumentParser:
     view_parser.add_argument("--spawn", action="store_true",
                              help="open the rerun viewer; nothing is written unless "
                                   "--out asks for it as well")
-    view_parser.add_argument("--mp4", default=None,
-                             help="also draw the scene as a video at this path; needs "
-                                  "matplotlib and ffmpeg")
-    view_parser.add_argument("--fps", type=int, default=20,
-                             help="frame rate of that video (default 20)")
     view_parser.add_argument("--vial-pose", type=float, nargs=7,
                              metavar=("X", "Y", "Z", "QX", "QY", "QZ", "QW"),
                              help="pose of the centre of the lip in world, for a "

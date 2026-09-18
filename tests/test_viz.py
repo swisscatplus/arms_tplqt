@@ -1,9 +1,8 @@
 """Tests for drawing a generated stroke.
 
-The geometry every view is built from -- the vial wireframe, the blade and the
-clipping of the blade to the drawn frame -- is checked directly, and against the
-geometry the constraints of :mod:`tplqt.safety` are written in, so the picture
-cannot drift away from what is solved.
+The geometry the view is built from -- the vial wireframe and the blade -- is
+checked directly, and against the geometry the constraints of :mod:`tplqt.safety`
+are written in, so the picture cannot drift away from what is solved.
 
 What is drawn is checked by standing a recorder in for rerun, which keeps these
 tests independent of how a recording is stored on disk; that rerun accepts what
@@ -14,7 +13,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import sys
 import warnings
 
@@ -31,9 +29,8 @@ from tplqt.frames import tool_axis_world
 from tplqt.safety import (SafetySettings, SpatulaGeometry, VialGeometry, blade_points,
                           containment_margins, wall_radius)
 from tplqt.synthesize import synthesize
-from tplqt.viz import (DEMONSTRATION_COLOR, PALETTE, VIAL_COLOR, Scene, Trajectory,
-                       blade_in_spatula_frame, clip_to_box, entity_name, log_scene,
-                       record_rrd, render_mp4, show, vial_wireframe)
+from tplqt.viz import (PALETTE, Scene, Trajectory, blade_in_spatula_frame, entity_name,
+                       log_scene, record_rrd, show, vial_wireframe)
 
 CONTACT = np.array([0.005, -0.003, -0.040])
 HORIZON = 30
@@ -116,26 +113,6 @@ def test_the_drawn_blade_is_the_rod_the_constraints_keep_inside():
     expected = blade_points(tip, tool_axis_world(quat), SPATULA.length, [0.0, 1.0])[0]
     assert_allclose(drawn, expected, atol=1e-12)
     assert np.linalg.norm(drawn[1] - drawn[0]) == pytest.approx(SPATULA.length, rel=1e-12)
-
-
-def test_a_segment_inside_the_frame_is_drawn_whole():
-    lower, upper = np.zeros(3), np.ones(3)
-    start, end = np.array([0.2, 0.2, 0.2]), np.array([0.8, 0.7, 0.6])
-    assert_allclose(clip_to_box(start, end, lower, upper), [start, end], atol=1e-12)
-
-
-def test_a_segment_leaving_the_frame_is_cut_at_the_face_it_leaves_through():
-    lower, upper = np.zeros(3), np.ones(3)
-    clipped = clip_to_box([0.5, 0.5, 0.5], [0.5, 0.5, 4.0], lower, upper)
-    assert_allclose(clipped, [[0.5, 0.5, 0.5], [0.5, 0.5, 1.0]], atol=1e-12)
-
-
-@pytest.mark.parametrize("start,end", [([2.0, 2.0, 2.0], [3.0, 3.0, 3.0]),
-                                       ([-1.0, 0.5, 0.5], [-2.0, 0.5, 0.5]),
-                                       ([0.5, 0.5, 2.0], [0.5, 0.9, 2.0])])
-def test_a_segment_outside_the_frame_is_not_drawn_at_all(start, end):
-    """Including one parallel to a face, which has no crossing to solve for."""
-    assert clip_to_box(start, end, np.zeros(3), np.ones(3)) is None
 
 
 def test_a_trajectory_must_carry_one_orientation_for_every_position():
@@ -393,48 +370,6 @@ def test_without_rerun_the_error_names_the_package_to_install(monkeypatch, scene
         record_rrd(str(tmp_path / "scene.rrd"), scene)
 
 
-@pytest.mark.parametrize("max_frames,samples", [(2, [0, 15]), (7, [0, 5, 10, 15, 20, 25]),
-                                               (HORIZON * 2, list(range(HORIZON)))])
-def test_the_video_draws_the_samples_it_is_asked_for(tmp_path, scene, monkeypatch,
-                                                     max_frames, samples):
-    """``max_frames`` is a ceiling on the frames drawn, spread along the stroke."""
-    pytest.importorskip("matplotlib")
-    if shutil.which("ffmpeg") is None:
-        pytest.skip("rendering a video needs ffmpeg")
-    drawn = []
-    monkeypatch.setattr("matplotlib.figure.Figure.suptitle",
-                        lambda self, text, **kwargs: drawn.append(text))
-    path = render_mp4(str(tmp_path / "scene.mp4"), scene, max_frames=max_frames, fps=2)
-    assert os.path.getsize(path) > 0
-    assert len(set(drawn)) <= max_frames
-    assert set(drawn) == {f"sample {t} of {HORIZON - 1}" for t in samples}
-
-
-def test_the_video_draws_the_vial_the_demonstrations_and_every_stroke(tmp_path, scene,
-                                                                      monkeypatch):
-    """Each part of the scene is drawn in its own colour, so a missing one shows."""
-    pytest.importorskip("matplotlib")
-    if shutil.which("ffmpeg") is None:
-        pytest.skip("rendering a video needs ffmpeg")
-    from mpl_toolkits.mplot3d import Axes3D
-
-    colors, plot = [], Axes3D.plot
-    monkeypatch.setattr(Axes3D, "plot", lambda self, *args, **kwargs:
-                        (colors.append(kwargs.get("color")), plot(self, *args, **kwargs))[1])
-    second = Trajectory(scene.trajectories[0].position, scene.trajectories[0].orientation,
-                        scene.trajectories[0].velocity, name="second")
-    render_mp4(str(tmp_path / "two.mp4"),
-               Scene(vial_pose=scene.vial_pose,
-                     trajectories=[scene.trajectories[0], second],
-                     demonstrations=scene.demonstrations, contact_point=scene.contact_point),
-               max_frames=1, fps=1)
-
-    drawn_colors = {tuple(np.round(c, 6)) for c in colors if c is not None}
-    for expected in (VIAL_COLOR, DEMONSTRATION_COLOR, PALETTE[0][0], PALETTE[0][1],
-                     PALETTE[1][0], PALETTE[1][1]):
-        assert tuple(np.round(np.asarray(expected) / 255.0, 6)) in drawn_colors, expected
-
-
 @pytest.fixture
 def drawn(monkeypatch):
     """Catch the scene the command line builds instead of recording it."""
@@ -561,19 +496,6 @@ def test_view_draws_strokes_of_the_same_situation_together(tmp_path, generated,
                            vial_position=(position + 1e-5).tolist())
     cli.main(["view", first, other])
     assert len(drawn["scene"].trajectories) == 2
-
-
-def test_view_renders_a_video_when_it_is_asked_for(tmp_path, generated, single_stroke,
-                                                  drawn, monkeypatch):
-    """The flags reach the renderer; what it draws is tested on the renderer itself."""
-    rendered = {}
-    monkeypatch.setattr(cli, "render_mp4", lambda path, scene, fps: rendered.update(
-        path=path, scene=scene, fps=fps))
-    stroke = written_stroke(tmp_path / "stroke.npz", generated, single_stroke)
-    movie = str(tmp_path / "stroke.mp4")
-    cli.main(["view", stroke, "--mp4", movie, "--fps", "12"])
-    assert (rendered["path"], rendered["fps"]) == (movie, 12)
-    assert rendered["scene"] is drawn["scene"]
 
 
 def test_view_needs_a_vial_pose_from_somewhere(tmp_path, generated, single_stroke, drawn):

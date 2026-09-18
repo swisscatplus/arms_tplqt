@@ -8,14 +8,12 @@ stroke as a rigid body carrying its own axes, so the lean of the blade and the
 roll about it are visible while the stroke is scrubbed.
 
 :func:`record_rrd` writes the scene as a `rerun <https://rerun.io>`_ recording to
-open in the viewer, :func:`show` opens the viewer on it directly, and
-:func:`render_mp4` draws the same scene as a two-viewpoint video, for a figure or
-for a machine with no viewer to open. Several strokes can be drawn in one scene,
-which is how a stroke and its constrained re-solve are compared.
+open in the viewer and :func:`show` opens the viewer on it directly. Several
+strokes can be drawn in one scene, which is how a stroke and its constrained
+re-solve are compared.
 
-Neither rerun nor matplotlib is a dependency of the rest of the package; both are
-imported only when a view is actually drawn. Install them with
-``pip install tplqt[viz]``.
+Rerun is not a dependency of the rest of the package; it is imported only when a
+view is actually drawn. Install it with ``pip install tplqt[viz]``.
 """
 from __future__ import annotations
 
@@ -25,7 +23,7 @@ from typing import Optional, Sequence, Tuple
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from .frames import SPATULA_TOOL_AXIS, Frame, tool_axis_world
+from .frames import SPATULA_TOOL_AXIS, Frame
 from .safety import SpatulaGeometry, VialGeometry
 from .synthesize import Synthesis
 
@@ -209,31 +207,6 @@ def blade_in_spatula_frame(spatula: SpatulaGeometry = SpatulaGeometry()) -> np.n
     return np.array([np.zeros(3), -spatula.length * SPATULA_TOOL_AXIS])
 
 
-def clip_to_box(start, end, lower, upper) -> Optional[np.ndarray]:
-    """The part of a segment that lies inside an axis-aligned box.
-
-    Returns the two endpoints of the piece inside, or ``None`` if the segment
-    misses the box entirely. Matplotlib draws a three-dimensional line past the
-    edges of its axes, so the blade -- which is twice as long as the vial and
-    mostly outside the view -- is cut to the box before it is drawn.
-    """
-    start, end = np.asarray(start, float), np.asarray(end, float)
-    direction = end - start
-    first, last = 0.0, 1.0
-    for axis in range(3):
-        if abs(direction[axis]) < 1e-12:
-            if not lower[axis] <= start[axis] <= upper[axis]:
-                return None
-            continue
-        near = (lower[axis] - start[axis]) / direction[axis]
-        far = (upper[axis] - start[axis]) / direction[axis]
-        first = max(first, min(near, far))
-        last = min(last, max(near, far))
-        if first > last:
-            return None
-    return np.array([start + first * direction, start + last * direction])
-
-
 def _rerun():
     """The rerun module, with an error that names the package it installs under."""
     try:
@@ -334,89 +307,3 @@ def show(scene: Scene) -> None:
 
     rr.init(f"tplqt {scene.name}", spawn=True)
     log_scene(scene)
-
-
-def render_mp4(path: str, scene: Scene, *, fps: int = 20, max_frames: int = 120,
-               figsize: Tuple[float, float] = (12.0, 6.0)) -> str:
-    """Draw ``scene`` as a two-viewpoint animation and write it to ``path``.
-
-    Needs matplotlib and ffmpeg. The two viewpoints are a general one and a view
-    straight down the bore, which between them show the depth the stroke reaches
-    and how far across the mouth it goes. At most ``max_frames`` samples are
-    drawn, spread evenly along the longest stroke.
-    """
-    from matplotlib.animation import FFMpegWriter, FuncAnimation
-    from matplotlib.backends.backend_agg import FigureCanvasAgg
-    from matplotlib.figure import Figure
-
-    strips = vial_wireframe(scene.frame, scene.vial)
-    blade_length = scene.spatula.length
-    demonstrations = [scene.to_world(p) for p in (scene.demonstrations or ())]
-    drawn = [(trajectory,) + tuple(np.asarray(c) / 255.0
-                                   for c in scene.colors(index, trajectory))
-             for index, trajectory in enumerate(scene.trajectories)]
-    tool = {trajectory.name: np.atleast_2d(tool_axis_world(trajectory.orientation))
-            for trajectory, _, _ in drawn}
-
-    step = max(1, int(np.ceil(scene.n_samples / max_frames)))
-    drawn_samples = np.arange(0, scene.n_samples, step)
-    # The frame holds the vial and the strokes; the blade is longer than both and
-    # is cut to the frame rather than shrinking everything else.
-    extent = np.vstack([t.position for t in scene.trajectories] + strips)
-    centre = (extent.min(0) + extent.max(0)) / 2.0
-    radius = (extent.max(0) - extent.min(0)).max() / 2.0 * 1.05
-    lower, upper = centre - radius, centre + radius
-    contact = (None if scene.contact_point is None
-               else scene.to_world(scene.contact_point))
-
-    # The figure is built and drawn without pyplot, so rendering a video does not
-    # take over the backend of whoever called.
-    figure = Figure(figsize=figsize)
-    FigureCanvasAgg(figure)
-    axes = [figure.add_subplot(1, 2, k + 1, projection="3d") for k in range(2)]
-    # One general view, and one looking straight into the mouth along the bore,
-    # where the mouth is a circle and it is plain how far across it the stroke
-    # reaches.
-    bore = scene.frame[0][:, 2]
-    viewpoints = [((20.0, -60.0), "perspective"),
-                  ((float(np.degrees(np.arcsin(np.clip(bore[2], -1.0, 1.0)))),
-                    float(np.degrees(np.arctan2(bore[1], bore[0])))), "along the bore")]
-
-    def draw(index):
-        t = int(drawn_samples[index])
-        for axis, ((elevation, azimuth), title) in zip(axes, viewpoints):
-            axis.cla()
-            axis.set_title(title)
-            axis.set_xlim(centre[0] - radius, centre[0] + radius)
-            axis.set_ylim(centre[1] - radius, centre[1] + radius)
-            axis.set_zlim(centre[2] - radius, centre[2] + radius)
-            axis.view_init(elev=elevation, azim=azimuth)
-            axis.set_box_aspect((1.0, 1.0, 1.0))
-            axis.locator_params(nbins=4)
-            axis.set_xlabel("x")
-            axis.set_ylabel("y")
-            axis.set_zlabel("z")
-            for strip in strips:
-                axis.plot(*strip.T, color=np.asarray(VIAL_COLOR) / 255.0, lw=0.8)
-            for demonstration in demonstrations:
-                axis.plot(*demonstration.T,
-                          color=np.asarray(DEMONSTRATION_COLOR) / 255.0, lw=0.6)
-            if contact is not None:
-                axis.scatter(*contact, color=np.asarray(CONTACT_COLOR) / 255.0, s=20,
-                             edgecolor="k", linewidth=0.5)
-            for trajectory, path_color, body_color in drawn:
-                last = min(t, len(trajectory) - 1)
-                axis.plot(*trajectory.position[:last + 1].T, color=path_color, lw=1.6)
-                tip = trajectory.position[last]
-                base = tip - blade_length * tool[trajectory.name][last]
-                blade = clip_to_box(tip, base, lower, upper)
-                if blade is not None:
-                    axis.plot(*blade.T, color=body_color, lw=2.8)
-                if trajectory.velocity is not None:
-                    axis.quiver(*tip, *(VELOCITY_SCALE * trajectory.velocity[last]),
-                                color=np.asarray(VELOCITY_COLOR) / 255.0, lw=2)
-        figure.suptitle(f"sample {t} of {scene.n_samples - 1}")
-
-    animation = FuncAnimation(figure, draw, frames=len(drawn_samples), blit=False)
-    animation.save(path, writer=FFMpegWriter(fps=fps))
-    return path

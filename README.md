@@ -40,15 +40,11 @@ prefix:
 python3 -m pip install -e .
 ```
 
-Drawing a stroke needs rerun, and matplotlib for the video; neither is needed for
-anything else:
+Drawing a stroke needs rerun, which nothing else in the package needs:
 
 ```bash
-python3 -m pip install rerun-sdk matplotlib     # or: python3 -m pip install -e ".[viz]"
+python3 -m pip install rerun-sdk                # or: python3 -m pip install -e ".[viz]"
 ```
-
-The video is written through ffmpeg, which is not a Python package: install it
-from your system, on Debian or Ubuntu with `apt install ffmpeg`.
 
 ## Data
 
@@ -98,8 +94,8 @@ your own with `tplqt.calibration.load_config(path)`.
 Fit a model and generate a stroke, as a scoop:
 
 ```bash
-python3 -m tplqt generate data/salt_scoop --contact 0 0 -0.043 --safe --out salt_scoop.npz
-python3 -m tplqt generate data/honey_scoop --contact 0 0 -0.043 --safe --out honey_scoop.npz
+python3 -m tplqt generate data/salt_scoop --contact 0 -0.005 -0.046 --safe --control-cost 0.5 --out salt_scoop.npz
+python3 -m tplqt generate data/honey_scoop --contact 0 -0.005 -0.046 --safe --control-cost 0.5 --out honey_scoop.npz
 ```
 
 As a deposit against the vial wall, where the contact frame follows the azimuth of
@@ -145,62 +141,44 @@ behind them, the contact point in yellow, and the spatula riding each stroke
 carrying its own axis triad, so the lean of the blade and the roll about it are
 both visible while the stroke is scrubbed.
 
+The salt scoop:
+
 ```bash
-python3 -m tplqt generate data/salt_scoop --contact 0 0 -0.043 --safe --out salt_scoop.npz
+python3 -m tplqt generate data/salt_scoop --contact 0 -0.005 -0.046 --safe --control-cost 0.5 --out salt_scoop.npz
 python3 -m tplqt view salt_scoop.npz --demos data/salt_scoop
 rerun salt_scoop.rrd
 ```
 
-`view` writes `salt_scoop.rrd` next to the trajectory; `rerun` opens it. To skip
-the file and open the viewer directly, use `--spawn`:
+The honey scoop, which takes the same parameters:
 
 ```bash
-python3 -m tplqt view salt_scoop.npz --demos data/salt_scoop --spawn
+python3 -m tplqt generate data/honey_scoop --contact 0 -0.005 -0.046 --safe --control-cost 0.5 --out honey_scoop.npz
+python3 -m tplqt view honey_scoop.npz --demos data/honey_scoop
+rerun honey_scoop.rrd
 ```
 
-The scoop should drop in through the mouth, run down the middle to the yellow
-contact point at the bottom, then lift and drift a few millimetres off the axis on
-the way out, with the spatula leaning into the vial throughout and the grey
-demonstrations around it. Ask for a contact point off the axis and the descent
-follows it.
-
-Several trajectories are drawn together, each in its own colour -- the first red,
-the second green -- which is how a stroke and its constrained re-solve are
-compared. The deposit puts the spatula against the wall, so it is the one where
-the constraints bite:
+The honey deposit, where the contact frame follows the azimuth of the contact
+point and the spatula leans towards the wall it deposits on:
 
 ```bash
 python3 -m tplqt generate data/honey_deposit --contact-orientation radial \
-    --contact 0.0 0.011 -0.045 --flat-ends --out deposit.npz
-python3 -m tplqt generate data/honey_deposit --contact-orientation radial \
-    --contact 0.0 0.011 -0.045 --flat-ends --safe --out deposit_inside.npz
-python3 -m tplqt view deposit.npz deposit_inside.npz --demos data/honey_deposit
+    --contact 0.0 0.011 -0.045 --flat-ends --out honey_deposit.npz
+python3 -m tplqt view honey_deposit.npz --demos data/honey_deposit
+rerun honey_deposit.rrd
 ```
 
-`view` measures each stroke as it draws it -- how deep it goes, how close it comes
-to the contact point, and how much clearance the blade keeps from the wall and the
-mouth, negative where it reaches through them:
+| salt scoop | honey scoop | honey deposit |
+| --- | --- | --- |
+| ![The salt scoop](figures/salt_scoop.png) | ![The honey scoop](figures/honey_scoop.png) | ![The honey deposit](figures/honey_deposit.png) |
 
-```
-  stroke                       depth    to the contact    clearance
-  deposit                   -45.2 mm           0.21 mm    -2.641 mm
-  deposit_inside            -45.0 mm           0.11 mm    -0.004 mm
-```
+In each, the red line is the path of the tip and the pale one is the blade, held
+at the pose of the sample the viewer is stopped at; the yellow dot is the contact
+point the stroke was generated for. The demonstrations are switched off in these
+three views.
 
-So the red stroke has the blade 2.6 mm through the wall and the green one is the
-same stroke held against it, which is what `--safe` buys and what the two colours
-show. On the scooping datasets the demonstrated stroke already clears the wall, so
-there `--safe` changes nothing and the two strokes are drawn on top of each other.
-
-For a figure, or for a machine with no viewer to open, `--mp4` draws the scene as
-a video instead, from a general viewpoint and from straight down the bore. It is a
-plain plot rather than the recording -- the vial, the demonstrations, the contact
-point and the blade of each stroke, without the axis triad the viewer carries. It
-needs matplotlib and ffmpeg, and takes about fifteen seconds:
-
-```bash
-python3 -m tplqt view salt_scoop.npz --demos data/salt_scoop --mp4 salt_scoop.mp4
-```
+`view` writes the `.rrd` next to the trajectory, and `rerun` opens it; `--spawn`
+opens the viewer without writing a file. `python3 -m tplqt generate --help` and
+`python3 -m tplqt view --help` list every parameter.
 
 From a script, the scene is built and drawn directly:
 
@@ -322,9 +300,9 @@ python3 -m pytest                                    # the suite, no data needed
 TPLQT_DATASET=data/salt_scoop python3 -m pytest       # also the tests that use a dataset
 ```
 
-The suite runs without rerun, matplotlib or ffmpeg: what is drawn is checked
-against a recorder standing in for rerun, and the two tests that really write a
-recording and a video skip when they cannot.
+The suite runs without rerun: what is drawn is checked against a recorder standing
+in for it, and the one test that really writes a recording skips when rerun is not
+installed.
 
 ## Citation
 

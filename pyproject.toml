@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-viz = ["rerun-sdk>=0.32", "matplotlib>=3.7"]
+viz = ["rerun-sdk>=0.32"]
 test = ["pytest>=7.0"]
 
 [project.scripts]
